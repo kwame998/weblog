@@ -1,0 +1,17 @@
+<html>
+	<head>
+		<title>WebLog test</title>
+	</head>
+	<body>
+		<script type="text/javascript">
+			conn = new WebSocket("ws://localhost:8080/ws")
+			conn.onclose = function(evt) {
+				console.log("huh")
+			}
+
+			conn.onmessage = function(evt) {
+				console.log(evt.data)
+			}
+		</script>
+	</body>
+</html>
