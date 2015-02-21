@@ -1,0 +1,5 @@
+package weblog
+
+import (
+	"testing"
+)
