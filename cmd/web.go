@@ -15,7 +15,7 @@ func main() {
 	http.HandleFunc("/", home)
 
 	l = log.New(wl, "LOGGING: ", log.Ldate|log.Ltime)
-
+	go wl.Run()
 	http.ListenAndServe(":8080", nil)
 }
 

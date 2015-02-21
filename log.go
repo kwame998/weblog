@@ -9,37 +9,58 @@ import (
 
 var upgrader = &websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
 
-func NewWebLog() WebLog {
-	return WebLog{make(chan []byte, 256)}
+func NewWebLog() *WebLog {
+	return &WebLog{register: make(chan *connection)}
 }
 
 type WebLog struct {
-	send chan []byte
+	register    chan *connection
+	connections []*connection
 }
 
-func (wl WebLog) Write(p []byte) (int, error) {
-	wl.send <- p
+func (wl *WebLog) Run() {
+	for {
+		select {
+		case c := <-wl.register:
+			wl.connections = append(wl.connections, c)
+			fmt.Println("Registerd")
+		}
+	}
+}
+
+func (wl *WebLog) Write(p []byte) (int, error) {
+	for _, conn := range wl.connections {
+		fmt.Println("WOO")
+		conn.send <- p
+	}
+
 	return len(p), nil
 }
 
-func (wl WebLog) Handle(w http.ResponseWriter, r *http.Request) {
+func (wl *WebLog) Handle(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
+	c := &connection{send: make(chan []byte, 256), ws: ws}
+	wl.register <- c
 
-	ws.WriteMessage(websocket.TextMessage, []byte("Welcome to weblog!"))
+	c.send <- []byte("Welcome to weblog!")
 
-	go func() {
-		for message := range wl.send {
-			err := ws.WriteMessage(websocket.TextMessage, message)
-			if err != nil {
-				fmt.Println("Error: ", err)
-				break
-			}
-			fmt.Println("SENDING MESSAGE")
+	c.writer()
+}
+
+type connection struct {
+	send chan []byte
+	ws   *websocket.Conn
+}
+
+func (c connection) writer() {
+	for message := range c.send {
+		err := c.ws.WriteMessage(websocket.TextMessage, message)
+		if err != nil {
+			fmt.Println("Error: ", err)
+			break
 		}
-
-		ws.Close()
-	}()
+	}
 }
