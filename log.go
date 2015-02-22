@@ -2,6 +2,7 @@ package weblog
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -9,50 +10,69 @@ import (
 
 var upgrader = &websocket.Upgrader{ReadBufferSize: 1024, WriteBufferSize: 1024}
 
-func NewWebLog() *WebLog {
-	return &WebLog{register: make(chan *connection),
-		unregister:  make(chan *connection),
-		connections: make(map[*connection]bool)}
+func NewWebLogger() *WebLogger {
+	ww := NewWebWriter()
+	l := log.New(ww, "", log.Lshortfile)
+	go ww.Run()
+
+	return &WebLogger{l, ww}
 }
 
-type WebLog struct {
+type WebLogger struct {
+	*log.Logger
+
+	writer *WebWriter
+}
+
+func (wl *WebLogger) Handle(w http.ResponseWriter, r *http.Request) {
+	wl.writer.Handle(w, r)
+}
+
+func NewWebWriter() *WebWriter {
+	ww := &WebWriter{register: make(chan *connection),
+		unregister:  make(chan *connection),
+		connections: make(map[*connection]bool)}
+	return ww
+}
+
+type WebWriter struct {
 	register    chan *connection
 	unregister  chan *connection
 	connections map[*connection]bool
 }
 
-func (wl *WebLog) Run() {
+func (ww *WebWriter) Run() {
 	for {
 		select {
-		case c := <-wl.unregister:
-			wl.connections[c] = false
-			delete(wl.connections, c)
+		case c := <-ww.unregister:
+			ww.connections[c] = false
+			delete(ww.connections, c)
 			c.ws.Close()
-		case c := <-wl.register:
-			wl.connections[c] = true
+		case c := <-ww.register:
+			ww.connections[c] = true
 			fmt.Println("Just registered a client")
 		}
 	}
 }
 
-func (wl *WebLog) Write(p []byte) (int, error) {
-	for conn := range wl.connections {
+func (ww *WebWriter) Write(p []byte) (int, error) {
+	for conn := range ww.connections {
 		conn.send <- p
 	}
 
 	return len(p), nil
 }
 
-func (wl *WebLog) Handle(w http.ResponseWriter, r *http.Request) {
+func (ww *WebWriter) Handle(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
 	c := &connection{send: make(chan []byte, 256), ws: ws}
-	wl.register <- c
-	defer func() { wl.unregister <- c }()
+	ww.register <- c
+	defer func() { ww.unregister <- c }()
 
-	c.send <- []byte("Welcome to weblog!")
+	c.send <- []byte("Welcome to WebWriter!")
 	c.writer()
 }
 

@@ -4,18 +4,14 @@ import (
 	"net/http"
 
 	"github.com/paked/weblog"
-	"log"
 )
 
-var l *log.Logger
+var l *weblog.WebLogger = weblog.NewWebLogger()
 
 func main() {
-	wl := weblog.NewWebLog()
-	http.HandleFunc("/ws", wl.Handle)
+	http.HandleFunc("/ws", l.Handle)
 	http.HandleFunc("/", home)
 
-	l = log.New(wl, "LOGGING: ", log.Ldate|log.Ltime)
-	go wl.Run()
 	http.ListenAndServe(":8080", nil)
 }
 
